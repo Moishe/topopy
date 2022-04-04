@@ -14,14 +14,14 @@ def xlat_coord(coord, dx0, dy0):
     return (x,y)
 
 try:
-    data = np.load('data.npy')
-    offsets = np.load('offsets.npy')
-    pixel_coordinates = np.load('pixel-coords.npy')
+    data = np.load('cache/data.npy')
+    offsets = np.load('cache/offsets.npy')
+    pixel_coordinates = np.load('cache/pixel-coords.npy')
 except OSError:
     data = None
 
 if data is None:
-    fns = ['N40W106.hgt', 'N39W106.hgt']
+    fns = ['data/N40W106.hgt', 'data/N39W106.hgt']
 
     data = None
     for fn in fns:
@@ -37,7 +37,7 @@ if data is None:
         else:
             data = quad
 
-    f = open('County_Boundary.geojson')
+    f = open('data/County_Boundary.geojson')
     boundary = json.load(f)
     coordinates = boundary['features'][0]['geometry']['coordinates'][0][0]
     boundary_path = matplotlib.path.Path(coordinates)
@@ -70,21 +70,29 @@ if data is None:
 
     #data = np.where(data == 0, mn, data)
 
-    np.save('data', data)
-    np.save('bounded-data', bounded_data)
+    np.save('cache/data', data)
+    np.save('cache/bounded-data', bounded_data)
 
     offsets = np.array([dx0, dy0])
-    np.save('offsets', offsets)
-    np.save('pixel-coords', pixel_coordinates)
+    np.save('cache/offsets', offsets)
+    np.save('cache/pixel-coords', pixel_coordinates)
+
+    f = open('data/Lakes_and_Reservoirs.geojson')
+    lakes_and_reservoirs_json = json.load(f)
+    lakes_and_reservoirs_coords = []
+    for lr in lakes_and_reservoirs_json['features']:
+        coordinates = lr['geometry']['coordinates'][0]
+        pc = [xlat_coord(coord, bbox.x0, bbox.y0) for coord in coordinates]
+        lakes_and_reservoirs_coords.append(pc)
 
 fig, ax = plt.subplots()
 plt.axis('off')
 plt.tight_layout()
 plt.gcf().set_size_inches(10, 8)
 
-mn = 3000 #1500
+mn = 1500 #1500
 mx = 4200 #4200
-step = 100
+step = 5
 l = [mn + x * step for x in range(0, int(np.floor((mx - mn) / step) + 1))]
 print("%d contours" % len(l))
 
@@ -92,11 +100,16 @@ pixel_path = matplotlib.path.Path(pixel_coordinates)
 clip_path = patches.PathPatch(pixel_path, color=None, fill=False, visible=False)
 plt.gca().add_patch(clip_path)
 
-cont = plt.contour(range(0, data.shape[1]), range(0, data.shape[0]), data, l, alpha = 0.5, linewidths = 0.1, colors='black')
+for lr in lakes_and_reservoirs_coords:
+    pixel_path = matplotlib.path.Path(lr)
+    clip_path = patches.PathPatch(pixel_path)
+    plt.gca().add_patch(clip_path)
+
+cont = plt.contour(range(0, data.shape[1]), range(0, data.shape[0]), data, l, alpha = 0.2, linewidths = 0.1, colors='black')
 for c in cont.collections:
     c.set_clip_path(clip_path)
 
 home = (-105.24763 - -106)
 
-plt.savefig('contour-image-mountain.svg', format='svg', dpi=1200)
+plt.savefig('output/contour-image-mountain.svg', format='svg', dpi=1200)
 show()
