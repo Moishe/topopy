@@ -5,11 +5,18 @@ import matplotlib
 import numpy as np
 
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from matplotlib.pyplot import show
+
+def xlat_coord(coord, dx0, dy0):
+    x = int((coord[0] - dx0) * 3600)
+    y = int((coord[1] - dy0) * 3600)
+    return (x,y)
 
 try:
     data = np.load('data.npy')
-    offsets = np.load('coords.npy')
+    offsets = np.load('offsets.npy')
+    pixel_coordinates = np.load('pixel-coords.npy')
 except OSError:
     data = None
 
@@ -46,29 +53,50 @@ if data is None:
     dy0 = int((bbox.y0 - 39) * 3600)
     dy1 = dy0 + y_count
     data = data[dy0:dy1, dx0:dx1]
-    #data = np.full((y_count, x_count), 1)
+
+    pixel_coordinates = [xlat_coord(coord, bbox.x0, bbox.y0) for coord in coordinates]
 
     coordinate_grid = np.array([X,Y])
     d = np.dstack((coordinate_grid[0], coordinate_grid[1]))
     coords = [el for sublist in d for el in sublist]
     contains_points = boundary_path.contains_points(coords)
     normalized_contains = np.reshape(contains_points, (y_count, x_count))
-    print(normalized_contains.shape)
-    print(data.shape)
-    #print(boundary_path.contains_point((-106, -40.1)))
 
-    data = data * normalized_contains
+    mn = np.min(data)
+    mx = np.max(data)
+    print('Lowest/highest elevation in Boulder County: %d/%d' % (mn, mx))
+
+    bounded_data = data * normalized_contains
+
+    #data = np.where(data == 0, mn, data)
+
     np.save('data', data)
+    np.save('bounded-data', bounded_data)
 
     offsets = np.array([dx0, dy0])
     np.save('offsets', offsets)
+    np.save('pixel-coords', pixel_coordinates)
 
-fig = plt.gcf()
-#plt.axis('off')
-#by_el = np.fromfunction(lambda x,y: xlat_el(x, y, data, boundary_path), (dim, dim))
-plt.contour(range(0, data.shape[1]), range(0, data.shape[0]), data, levels=100, alpha = 0.8, linewidths = 0.1, colors='black')
-x = (-105.24763 - -106) * data.shape[1] + offsets[0]
-y = data.shape[0] - (40.05008 - 39) * data.shape[0] + offsets[0]
-plt.scatter([x], [y], label='Home', s=50)
-plt.savefig('contour-image.svg', format='svg', dpi=1200)
+fig, ax = plt.subplots()
+plt.axis('off')
+plt.tight_layout()
+plt.gcf().set_size_inches(10, 8)
+
+mn = 3000 #1500
+mx = 4200 #4200
+step = 100
+l = [mn + x * step for x in range(0, int(np.floor((mx - mn) / step) + 1))]
+print("%d contours" % len(l))
+
+pixel_path = matplotlib.path.Path(pixel_coordinates)
+clip_path = patches.PathPatch(pixel_path, color=None, fill=False, visible=False)
+plt.gca().add_patch(clip_path)
+
+cont = plt.contour(range(0, data.shape[1]), range(0, data.shape[0]), data, l, alpha = 0.5, linewidths = 0.1, colors='black')
+for c in cont.collections:
+    c.set_clip_path(clip_path)
+
+home = (-105.24763 - -106)
+
+plt.savefig('contour-image-mountain.svg', format='svg', dpi=1200)
 show()

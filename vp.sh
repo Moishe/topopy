@@ -1,0 +1,1 @@
+vpype read contour-image.svg linemerge reloop linesort write contour-image-new.svg
